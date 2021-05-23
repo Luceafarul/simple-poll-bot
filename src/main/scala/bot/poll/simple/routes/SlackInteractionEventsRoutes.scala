@@ -1,19 +1,20 @@
 package bot.poll.simple.routes
 
+import bot.poll.simple.config.AppConfig
+import bot.poll.simple.db.SlackTokensDb
+import bot.poll.simple.templates._
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import org.http4s._
 import org.http4s.dsl.Http4sDsl
-import org.latestbit.slack.morphism.client.reqresp.views._
 import org.latestbit.slack.morphism.client._
+import org.latestbit.slack.morphism.client.reqresp.chat.SlackApiChatPostMessageRequest
+import org.latestbit.slack.morphism.client.reqresp.views._
 import org.latestbit.slack.morphism.codecs.CirceCodecs
+import org.latestbit.slack.morphism.common.{SlackChannelId, SlackTriggerId}
 import org.latestbit.slack.morphism.events._
-import bot.poll.simple.config.AppConfig
-import bot.poll.simple.db.SlackTokensDb
-import bot.poll.simple.templates._
-import org.latestbit.slack.morphism.common.SlackTriggerId
 
 class SlackInteractionEventsRoutes[F[_]: Sync](
   slackApiClient: SlackApiClientT[F],
@@ -31,29 +32,44 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
       extractSlackWorkspaceToken[F](event.team.id) { implicit apiToken =>
         event match {
           case blockActionEvent: SlackInteractionBlockActionEvent => {
-            logger.info(s"Received a block action event: ${blockActionEvent}")
-            showDummyModal(blockActionEvent.trigger_id)
+            logger.info(s"Received a block action event: $blockActionEvent")
+            showBasicPollModal(blockActionEvent.trigger_id)
           }
           case messageActionEvent: SlackInteractionMessageActionEvent => {
-            logger.info(s"Received a message action event: ${messageActionEvent}")
-            showDummyModal(messageActionEvent.trigger_id)
+            logger.info(s"Received a message action event: $messageActionEvent")
+            showBasicPollModal(messageActionEvent.trigger_id)
           }
           case actionSubmissionEvent: SlackInteractionViewSubmissionEvent => {
-            actionSubmissionEvent.view.stateParams.state.foreach { state =>
-              logger.info(s"Received action submission state: ${state}")
-            }
+            logger.info(s"Received action submission state: $actionSubmissionEvent")
+            val pollModal = new PollModal()
+            slackApiClient.chat
+              .postMessage(
+                SlackApiChatPostMessageRequest(
+                  channel = SlackChannelId("C021Y0R1MNH"),
+                  text = "hello",
+                  blocks = Some(pollModal.renderBlocks())
+                )
+              )
+              .flatMap { resp =>
+                resp.leftMap(err => logger.error(err.getMessage))
+                Ok()
+              }
             Ok("") // "" is required here by Slack
           }
+          case shortcutEvent: SlackInteractionShortcutEvent => {
+            logger.info(s"Received shortcut interaction event: $shortcutEvent")
+            showBasicPollModal(shortcutEvent.trigger_id)
+          }
           case interactionEvent: SlackInteractionEvent => {
-            logger.warn(s"We don't handle this interaction in this example: ${interactionEvent}")
+            logger.warn(s"We don't handle this interaction in this example: $interactionEvent")
             Ok()
           }
         }
       }
     }
 
-    def showDummyModal(triggerId: SlackTriggerId)(implicit slackApiToken: SlackApiToken) = {
-      val modalTemplateExample = new SlackModalTemplateExample()
+    def showBasicPollModal(triggerId: SlackTriggerId)(implicit slackApiToken: SlackApiToken) = {
+      val modalTemplateExample = new PollModal()
       slackApiClient.views
         .open(
           SlackApiViewsOpenRequest(
@@ -62,14 +78,12 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
           )
         )
         .flatMap {
-          case Right(resp) => {
-            logger.info(s"Modal view has been opened: ${resp}")
+          case Right(resp) =>
+            logger.info(s"Modal view has been opened: $resp")
             Ok()
-          }
-          case Left(err) => {
+          case Left(err) =>
             logger.error(s"Unable to open modal view", err)
             InternalServerError()
-          }
         }
     }
 
