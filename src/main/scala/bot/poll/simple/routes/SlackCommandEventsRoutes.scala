@@ -35,29 +35,14 @@ class SlackCommandEventsRoutes[F[_]: Sync](
               case (Some(text), Some(responseUrl), Some(channelId), Some(teamId), Some(trigger_id)) => {
 
                 extractSlackWorkspaceToken[F](SlackTeamId(teamId)) { implicit slackApiToken =>
-//                  slackApiClient.chat
-//                    .postMessage(
-//                      SlackApiChatPostMessageRequest(
-//                        channel = SlackChannelId(channelId),
-//                        text = text,
-//                        blocks = Some(pollModal.renderBlocks())
-//                      )
-//                    )
-//                slackApiClient.events
-//                  .reply(
-//                    response_url = responseUrl,
-//                    SlackApiEventMessageReply(
-//                      text = commandReply.renderPlainText(),
-//                      blocks = commandReply.renderBlocks(),
-//                      response_type = Some(SlackResponseTypes.Ephemeral)
-//                    )
-//                  )
-//                    .flatMap { resp =>
-//                      resp.leftMap(err => logger.error(err.getMessage))
-//                      Ok()
-//                    }
-
-                  showBasicPollModal(SlackTriggerId(trigger_id), text)
+                  showBasicPollModal(SlackTriggerId(trigger_id), text).flatMap {
+                    case Right(resp) =>
+                      logger.info(s"Modal view has been opened: $resp")
+                      Ok()
+                    case Left(err) =>
+                      logger.error(s"Unable to open modal view", err)
+                      InternalServerError()
+                  }
                 }
               }
               case _ => BadRequest()
@@ -68,10 +53,8 @@ class SlackCommandEventsRoutes[F[_]: Sync](
     }
   }
 
-  def showBasicPollModal(triggerId: SlackTriggerId, initialValue: String = "")(implicit slackApiToken: SlackApiToken) = {
-    val dsl = new Http4sDsl[F] {}
-    import dsl._
-
+  def showBasicPollModal(triggerId: SlackTriggerId, initialValue: String = "")(
+    implicit slackApiToken: SlackApiToken) = {
     val modalTemplateExample = new PollModal(initialValue)
     slackApiClient.views
       .open(
@@ -80,14 +63,6 @@ class SlackCommandEventsRoutes[F[_]: Sync](
           view = modalTemplateExample.toModalView()
         )
       )
-      .flatMap {
-        case Right(resp) =>
-          logger.info(s"Modal view has been opened: $resp")
-          Ok()
-        case Left(err) =>
-          logger.error(s"Unable to open modal view", err)
-          InternalServerError()
-      }
   }
 
 }

@@ -31,14 +31,6 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
     def onEvent(event: SlackInteractionEvent): F[Response[F]] = {
       extractSlackWorkspaceToken[F](event.team.id) { implicit apiToken =>
         event match {
-          case blockActionEvent: SlackInteractionBlockActionEvent => {
-            logger.info(s"Received a block action event: $blockActionEvent")
-            showBasicPollModal(blockActionEvent.trigger_id)
-          }
-          case messageActionEvent: SlackInteractionMessageActionEvent => {
-            logger.info(s"Received a message action event: $messageActionEvent")
-            showBasicPollModal(messageActionEvent.trigger_id)
-          }
           case actionSubmissionEvent: SlackInteractionViewSubmissionEvent => {
             logger.info(s"Received action submission state: $actionSubmissionEvent")
             val pollModal = new PollModal()
@@ -58,7 +50,14 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
           }
           case shortcutEvent: SlackInteractionShortcutEvent => {
             logger.info(s"Received shortcut interaction event: $shortcutEvent")
-            showBasicPollModal(shortcutEvent.trigger_id)
+            showBasicPollModal(shortcutEvent.trigger_id).flatMap {
+              case Right(resp) =>
+                logger.info(s"Modal view has been opened: $resp")
+                Ok()
+              case Left(err) =>
+                logger.error(s"Unable to open modal view", err)
+                InternalServerError()
+            }
           }
           case interactionEvent: SlackInteractionEvent => {
             logger.warn(s"We don't handle this interaction in this example: $interactionEvent")
@@ -77,14 +76,6 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
             view = modalTemplateExample.toModalView()
           )
         )
-        .flatMap {
-          case Right(resp) =>
-            logger.info(s"Modal view has been opened: $resp")
-            Ok()
-          case Left(err) =>
-            logger.error(s"Unable to open modal view", err)
-            InternalServerError()
-        }
     }
 
     HttpRoutes.of[F] {

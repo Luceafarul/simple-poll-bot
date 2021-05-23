@@ -29,25 +29,13 @@ class PollModal(initialValue: String = "") extends SlackModalViewTemplate {
         element = SlackBlockPlainInputElement(
           action_id = SlackActionId("opt_1_action")
         )
-      )/*,
+      ),
       inputBlock(
         label = pt"Option 2",
         element = SlackBlockPlainInputElement(
           action_id = SlackActionId("opt_2_action")
         )
-      ),
-      inputBlock(
-        label = pt"Option 3",
-        element = SlackBlockPlainInputElement(
-          action_id = SlackActionId("opt_3_action")
-        )
-      ),
-      inputBlock(
-        label = pt"Option 4",
-        element = SlackBlockPlainInputElement(
-          action_id = SlackActionId("opt_4_action")
-        )
-      )*/
+      )
     )
 
 }
