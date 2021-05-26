@@ -7,6 +7,7 @@ import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
+import io.circe.generic.JsonCodec
 import org.http4s._
 import org.http4s.dsl.Http4sDsl
 import org.latestbit.slack.morphism.client._
@@ -15,6 +16,7 @@ import org.latestbit.slack.morphism.client.reqresp.views._
 import org.latestbit.slack.morphism.codecs.CirceCodecs
 import org.latestbit.slack.morphism.common.{SlackChannelId, SlackTriggerId}
 import org.latestbit.slack.morphism.events._
+import org.latestbit.slack.morphism.views.{SlackHomeView, SlackModalView}
 
 class SlackInteractionEventsRoutes[F[_]: Sync](
   slackApiClient: SlackApiClientT[F],
@@ -33,20 +35,54 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
         event match {
           case actionSubmissionEvent: SlackInteractionViewSubmissionEvent => {
             logger.info(s"Received action submission state: $actionSubmissionEvent")
-            val pollModal = new PollModal()
-            slackApiClient.chat
-              .postMessage(
-                SlackApiChatPostMessageRequest(
-                  channel = SlackChannelId("C021Y0R1MNH"),
-                  text = "hello",
-                  blocks = Some(pollModal.renderBlocks())
-                )
-              )
-              .flatMap { resp =>
-                resp.leftMap(err => logger.error(err.getMessage))
-                Ok()
-              }
-            Ok("") // "" is required here by Slack
+            actionSubmissionEvent.view.view match {
+              case SlackModalView(title, blocks, close, submit, _, _, _, _, _, _) =>
+                val slackChannelId = SlackChannelId(blocks.head.block_id.get.value)
+                val pollModal      = new PollModal(slackChannelId.value)
+
+                import io.circe.generic.semiauto._
+                import bot.poll.simple.models._
+                import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+
+//                @JsonCodec final case class PollOption(title: PollField)
+//                @JsonCodec final case class PollField(`type`: String, value: String)
+
+                val res =
+                  actionSubmissionEvent.view.stateParams.state.map { state =>
+                    state.values.values.map { opt =>
+                      logger.info(s"JSON: $opt")
+                      opt.as[PollOption]
+                    }
+                  }
+
+                logger.info(s"THIS IS RES: $res")
+
+                val maybePollOption = res.map { list =>
+                  list.map {
+                    case Right(pollOpt) =>
+                      logger.info(s"THIS IS POLL OPT: $pollOpt")
+                      pollOpt
+                  }
+                }
+
+                val messageBlocks = maybePollOption.map { pollOptions =>
+                  new PollMessage(pollOptions.toList).renderBlocks()
+                }
+
+                slackApiClient.chat
+                  .postMessage(
+                    SlackApiChatPostMessageRequest(
+                      channel = slackChannelId,
+                      text = title.text,
+                      blocks = messageBlocks
+                    )
+                  )
+                  .flatMap { resp =>
+                    resp.leftMap(err => logger.error(err.getMessage))
+                    Ok()
+                  }
+              case SlackHomeView(_, _, _, _) => BadRequest()
+            }
           }
           case shortcutEvent: SlackInteractionShortcutEvent => {
             logger.info(s"Received shortcut interaction event: $shortcutEvent")
@@ -68,7 +104,7 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
     }
 
     def showBasicPollModal(triggerId: SlackTriggerId)(implicit slackApiToken: SlackApiToken) = {
-      val modalTemplateExample = new PollModal()
+      val modalTemplateExample = new PollModal("")
       slackApiClient.views
         .open(
           SlackApiViewsOpenRequest(

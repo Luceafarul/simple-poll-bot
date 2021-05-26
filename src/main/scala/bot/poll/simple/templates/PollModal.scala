@@ -1,10 +1,10 @@
 package bot.poll.simple.templates
 
 import org.latestbit.slack.morphism.client.templating.SlackModalViewTemplate
-import org.latestbit.slack.morphism.common.SlackActionId
+import org.latestbit.slack.morphism.common.{SlackActionId, SlackBlockId}
 import org.latestbit.slack.morphism.messages._
 
-class PollModal(initialValue: String = "") extends SlackModalViewTemplate {
+class PollModal(slackChannelId: String, initialValue: String = "") extends SlackModalViewTemplate {
 
   override def titleText(): SlackBlockPlainText = pt"Simple Poll"
 
@@ -22,18 +22,19 @@ class PollModal(initialValue: String = "") extends SlackModalViewTemplate {
           placeholder = SlackBlockPlainText(
             text = "Write poll issue here"
           )
-        )
+        ),
+        block_id = Some(SlackBlockId(slackChannelId))
       ),
       inputBlock(
         label = pt"Option 1",
         element = SlackBlockPlainInputElement(
-          action_id = SlackActionId("opt_1_action")
+          action_id = SlackActionId("title")
         )
       ),
       inputBlock(
         label = pt"Option 2",
         element = SlackBlockPlainInputElement(
-          action_id = SlackActionId("opt_2_action")
+          action_id = SlackActionId("title")
         )
       )
     )

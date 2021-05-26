@@ -1,32 +1,33 @@
 package bot.poll.simple.templates
 
+import bot.poll.simple.models.PollOption
 import cats.data.NonEmptyList
 import org.latestbit.slack.morphism.client.templating.SlackBlocksTemplate
+import org.latestbit.slack.morphism.common.SlackActionId
 import org.latestbit.slack.morphism.messages._
 
-class PollMessage(pollMessage: String, pollOptions: List[String] = ???) extends SlackBlocksTemplate {
+import java.util.UUID
 
-  override def renderBlocks(): List[SlackBlock] =
+class PollMessage(pollOptions: List[PollOption]) extends SlackBlocksTemplate {
+
+  override def renderBlocks(): List[SlackBlock] = {
     blocks(
       headerBlock(
-        SlackBlockPlainText(pollMessage)
+        SlackBlockPlainText(pollOptions.head.title.value)
       ),
-      actionsBlock(
-        elements = NonEmptyList.of(
+      NonEmptyList
+        .fromList(pollOptions.tail.map { pollOption =>
           button(
-            text = ???,
-            action_id = ???
-          ),
-          button(
-            text = ???,
-            action_id = ???
-          ),
-          button(
-            text = ???,
-            action_id = ???
+            text = SlackBlockPlainText(pollOption.title.value),
+            action_id = SlackActionId(pollOption.title.`type` + UUID.randomUUID())
           )
-        )
-      )
+        })
+        .map { nonEmptyList =>
+          actionsBlock(
+            elements = nonEmptyList
+          )
+        }
+        .get
     )
-
+  }
 }

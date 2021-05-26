@@ -10,7 +10,7 @@ import org.http4s._
 import org.http4s.dsl.Http4sDsl
 import org.latestbit.slack.morphism.client.reqresp.views.SlackApiViewsOpenRequest
 import org.latestbit.slack.morphism.client.{SlackApiClientT, SlackApiToken}
-import org.latestbit.slack.morphism.common.{SlackTeamId, SlackTriggerId}
+import org.latestbit.slack.morphism.common.{SlackChannelId, SlackTeamId, SlackTriggerId}
 
 class SlackCommandEventsRoutes[F[_]: Sync](
   slackApiClient: SlackApiClientT[F],
@@ -35,7 +35,7 @@ class SlackCommandEventsRoutes[F[_]: Sync](
               case (Some(text), Some(responseUrl), Some(channelId), Some(teamId), Some(trigger_id)) => {
 
                 extractSlackWorkspaceToken[F](SlackTeamId(teamId)) { implicit slackApiToken =>
-                  showBasicPollModal(SlackTriggerId(trigger_id), text).flatMap {
+                  showBasicPollModal(SlackTriggerId(trigger_id), SlackChannelId(channelId), text).flatMap {
                     case Right(resp) =>
                       logger.info(s"Modal view has been opened: $resp")
                       Ok()
@@ -53,14 +53,14 @@ class SlackCommandEventsRoutes[F[_]: Sync](
     }
   }
 
-  def showBasicPollModal(triggerId: SlackTriggerId, initialValue: String = "")(
+  def showBasicPollModal(triggerId: SlackTriggerId, channelId: SlackChannelId, initialValue: String = "")(
     implicit slackApiToken: SlackApiToken) = {
-    val modalTemplateExample = new PollModal(initialValue)
+    val modalTemplateExample = new PollModal(channelId.value, initialValue)
     slackApiClient.views
       .open(
         SlackApiViewsOpenRequest(
           trigger_id = triggerId,
-          view = modalTemplateExample.toModalView()
+          view = modalTemplateExample.toModalView(),
         )
       )
   }
