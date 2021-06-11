@@ -1,5 +1,6 @@
 package bot.poll.simple.templates
 
+import cats.data.NonEmptyList
 import org.latestbit.slack.morphism.client.templating.SlackModalViewTemplate
 import org.latestbit.slack.morphism.common.{SlackActionId, SlackBlockId}
 import org.latestbit.slack.morphism.messages._
@@ -35,6 +36,14 @@ class PollModal(slackChannelId: String, initialValue: String = "") extends Slack
         label = pt"Option 2",
         element = SlackBlockPlainInputElement(
           action_id = SlackActionId("title")
+        )
+      ),
+      actionsBlock(
+        NonEmptyList.of(
+          button(
+            text = SlackBlockPlainText("Add another option"),
+            action_id = SlackActionId("add_another_option")
+          )
         )
       )
     )

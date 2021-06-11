@@ -1,16 +1,14 @@
 package bot.poll.simple.db
 
-import cats.effect.{Bracket, ConcurrentEffect, LiftIO, Resource}
+import cats.effect.{ConcurrentEffect, LiftIO, Resource}
 import swaydb.data.slice.Slice
 import cats.implicits._
-import cats.effect.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import bot.poll.simple.config.AppConfig
 import cats.effect._
 import cats.effect.IO
 import org.latestbit.slack.morphism.common.{SlackAccessTokenValue, SlackApiTokenScope, SlackApiTokenType, SlackChannelId, SlackTeamId, SlackUserId}
 import swaydb.{IO => _, Set => _, _}
-import swaydb.serializers.Default._
 import swaydb.cats.effect.Tag._
 
 import scala.concurrent.ExecutionContext.Implicits.global

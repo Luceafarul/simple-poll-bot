@@ -7,16 +7,16 @@ import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
-import io.circe.generic.JsonCodec
 import org.http4s._
 import org.http4s.dsl.Http4sDsl
 import org.latestbit.slack.morphism.client._
 import org.latestbit.slack.morphism.client.reqresp.chat.SlackApiChatPostMessageRequest
 import org.latestbit.slack.morphism.client.reqresp.views._
 import org.latestbit.slack.morphism.codecs.CirceCodecs
-import org.latestbit.slack.morphism.common.{SlackChannelId, SlackTriggerId}
+import org.latestbit.slack.morphism.common.{SlackActionId, SlackChannelId, SlackTriggerId}
 import org.latestbit.slack.morphism.events._
-import org.latestbit.slack.morphism.views.{SlackHomeView, SlackModalView}
+import org.latestbit.slack.morphism.messages.{SlackBlockPlainInputElement, SlackBlockPlainText, SlackInputBlock}
+import org.latestbit.slack.morphism.views.{SlackHomeView, SlackModalView, SlackView}
 
 class SlackInteractionEventsRoutes[F[_]: Sync](
   slackApiClient: SlackApiClientT[F],
@@ -36,16 +36,10 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
           case actionSubmissionEvent: SlackInteractionViewSubmissionEvent => {
             logger.info(s"Received action submission state: $actionSubmissionEvent")
             actionSubmissionEvent.view.view match {
-              case SlackModalView(title, blocks, close, submit, _, _, _, _, _, _) =>
+              case SlackModalView(title, blocks, _, _, _, _, _, _, _, _) =>
                 val slackChannelId = SlackChannelId(blocks.head.block_id.get.value)
-                val pollModal      = new PollModal(slackChannelId.value)
 
-                import io.circe.generic.semiauto._
                 import bot.poll.simple.models._
-                import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
-
-//                @JsonCodec final case class PollOption(title: PollField)
-//                @JsonCodec final case class PollField(`type`: String, value: String)
 
                 val res =
                   actionSubmissionEvent.view.stateParams.state.map { state =>
@@ -86,6 +80,7 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
           }
           case shortcutEvent: SlackInteractionShortcutEvent => {
             logger.info(s"Received shortcut interaction event: $shortcutEvent")
+            shortcutEvent
             showBasicPollModal(shortcutEvent.trigger_id).flatMap {
               case Right(resp) =>
                 logger.info(s"Modal view has been opened: $resp")
@@ -94,6 +89,35 @@ class SlackInteractionEventsRoutes[F[_]: Sync](
                 logger.error(s"Unable to open modal view", err)
                 InternalServerError()
             }
+          }
+          case blockActionEvent: SlackInteractionBlockActionEvent => {
+            var optionCountStart = 3
+            blockActionEvent.view.map {
+              case modalView: SlackModalView =>
+                val anotherOption = SlackInputBlock(
+                  label = SlackBlockPlainText(s"Option $optionCountStart"),
+                  element = SlackBlockPlainInputElement(
+                    action_id = SlackActionId("title")
+                  )
+                )
+                optionCountStart += 1
+
+                slackApiClient.views
+                  .update(
+                    SlackApiViewsUpdateRequest(
+                      view = modalView.copy(blocks = modalView.blocks :+ anotherOption),
+                      external_id = modalView.external_id,
+                      hash = modalView.hash,
+                      view_id = modalView.private_metadata
+                    )
+                  )
+                  .flatMap { resp =>
+                    resp.leftMap(err => logger.error(err.getMessage))
+                    Ok()
+                  }
+
+              case _: SlackHomeView => BadRequest()
+            }.get // TODO: remove get
           }
           case interactionEvent: SlackInteractionEvent => {
             logger.warn(s"We don't handle this interaction in this example: $interactionEvent")

@@ -8,6 +8,7 @@ import org.latestbit.slack.morphism.messages._
 
 import java.util.UUID
 
+// TODO replace by SlackMessageTemplate
 class PollMessage(pollOptions: List[PollOption]) extends SlackBlocksTemplate {
 
   override def renderBlocks(): List[SlackBlock] = {
